@@ -51,7 +51,7 @@ class ROOT(APIView):
                 raise ValidationError(serializer.errors)
 
             # validate password
-            validate_password(password1)
+            # validate_password(password1)
 
         except ValidationError as e:
             return Response(
@@ -66,7 +66,14 @@ class ROOT(APIView):
         user.save()
         token = encode(user)
 
+        print("------------- POST: /users/")
+
         serializer = serializers.PrivateUserSerializer(user)
+        print(serializer.data)
+        # print(serializer.data["id"])
+        # print(serializer.data["pk"])
+        # print(serializer.data["username"])
+        # print(serializer.data["name"])
         return Response(
             serializer.data | {"jwt": token},
             status=status.HTTP_201_CREATED,
@@ -119,6 +126,7 @@ class Login(APIView):
         """
         지정한 사용자로 로그인합니다
         """
+        print("---------------- hey")
         username = request.data.get("username")
         password = request.data.get("password")
         if not username or not password:
@@ -164,11 +172,11 @@ class Logout(APIView):
         )
 
 
-# /users/me
-class Me(APIView):
+# /users/verify
+class Verify(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+    def post(self, request):
         """
         록인한 사용자의 정보를 반환합니다
         """

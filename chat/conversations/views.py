@@ -3,8 +3,12 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
 from django.core.exceptions import PermissionDenied
+
 from . import serializers as conv_srlz
 from .models import Conversation
+from chat.messages import serializers as msg_srlz
+from utils.chatbot.prompt import pdf_chat
+from utils.chatbot.embedding.pdf_embedding import Embedder
 
 # Create your views here.
 
@@ -33,6 +37,8 @@ class ROOT(APIView):
         """
         새 대화를 생성합니다
         """
+        print("POST:conversations/")
+        print(request.data)
 
         user = request.user
         if not user or user.is_anonymous:
@@ -41,20 +47,66 @@ class ROOT(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        if not str(user.pk) == str(request.data.get("user")):
-            raise PermissionDenied("사용자 정보가 일치하지 않습니다.")
+        # save the conversation
+        data = request.data.copy()
+        # add 'user' field to the data
+        data["user"] = user.pk
 
-        serializer = conv_srlz.CreateSerializer(data=request.data)
-        if not serializer.is_valid():
+        # store file to `./.cache/{username}/file/{filename}`
+        # pdf_mode = "file" in request.data and request.data["file"] is not None
+
+        # pdf_mode is True if the request has a file field and is not null
+        pdf_mode = "file" in request.data and "null" != request.data["file"]
+
+        if pdf_mode:
+            embedder = Embedder()
+            file = request.data["file"]
+            embed_cache_info = embedder.embed(user.username, file)
+
+            data["pdf_url"] = embed_cache_info["file_path"]
+            data["embed_url"] = embed_cache_info["embed_path"]
+
+        print("before validation")
+
+        conv_serializer = conv_srlz.CreateSerializer(data=data)
+        if not conv_serializer.is_valid():
+            print("POST:conversations/")
+            print("conv_serializer is not valid")
+            print(conv_serializer.errors)
+            print(data)
             return Response(
-                {"errors": serializer.errors},
+                {"errors": conv_serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer.save(user=user)
+        conversation = conv_serializer.save(user=user)
+
+        # chat with the model
+        if pdf_mode:
+            chatterbox = pdf_chat.Chatbot(
+                conversation.pk, conversation.pdf_url, conversation.embed_url
+            )
+            first_question = "Say welcome and tell me what your job is. Then, summarize the document."
+            result = chatterbox.chat(first_question)
+
+            # save the ai-message
+            message = {
+                "conversation": conversation.pk,
+                "role": "ai",
+                "text": result,
+            }
+            msg_serializer = msg_srlz.CreateSerializer(data=message)
+            if not msg_serializer.is_valid():
+                print("POST:conversations/")
+                print("msg_serializer is not valid")
+                return Response(
+                    {"errors": msg_serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            msg_serializer.save()
 
         return Response(
-            serializer.data,
+            conv_serializer.data,
             status=status.HTTP_201_CREATED,
         )
 

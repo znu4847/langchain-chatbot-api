@@ -7,6 +7,7 @@ class ListSerializer(ModelSerializer):
         model = Conversation
         fields = [
             "pk",
+            "user",
             "title",
             "pdf_url",
             "embed_url",
@@ -35,7 +36,7 @@ class CreateSerializer(ModelSerializer):
             "charges",
         ]
 
-    def validate_name(self, value):
+    def validate_title(self, value):
         return value
 
     def validate(self, data):
