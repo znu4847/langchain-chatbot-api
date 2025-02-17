@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
 from django.core.exceptions import PermissionDenied
+from copy import copy
 
 from . import serializers as conv_srlz
 from .models import Conversation
@@ -48,7 +49,7 @@ class ROOT(APIView):
             )
 
         # save the conversation
-        data = request.data.copy()
+        data = copy(request.data)
         # add 'user' field to the data
         data["user"] = user.pk
 
